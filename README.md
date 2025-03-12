@@ -105,6 +105,9 @@ for i, chunk in enumerate(chunks):
     else:
         log.error(f"❌ Batch {i+1} failed: {response.text}")
 ```
+## ** Deliverrable **  
+
+The CSV is under include/reports -> channel_reporting.csv
 
 ---
 
