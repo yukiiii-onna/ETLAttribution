@@ -54,27 +54,7 @@ This decision allowed me to focus on building the pipeline rather than fixing in
 The project follows a structured layout that separates concerns across different components.
 
 📂 Project Structure
-ETLATTRIBUTION
-│
-├── dags
-│   ├── attribution_dag.py            # Main DAG defining the pipeline
-│
-├── include
-│   ├── challenge.db                   # SQLite database
-│   ├── create_tables.sql               # SQL script for table setup
-│   ├── data_generator.py               # Generates synthetic data
-│   │
-│   ├── utils                           # Utility functions
-│   │   ├── api_utils.py               # Handles API communication with IHC
-│   │   ├── config.py                   # Stores sensitive credentials (e.g., API keys)
-│   │   ├── db_utils.py                 # Manages database queries and connections
-│   │   ├── file_utils.py               # Handles CSV export and file storage
-│   │   ├── time_utils.py               # Manages time-range filtering for data processing
-│   │   ├── transformation_utils.py     # Processes customer journeys and calculates metrics
-│   │
-│   ├── reports                         # Stores exported CSV reports
-│       ├── channel_reporting.csv       # Final report with marketing channel performance
-
+<img width="676" alt="Screenshot 2025-03-12 at 22 39 12" src="https://github.com/user-attachments/assets/7d42a8a9-e152-42c0-a90e-95af6335ab34" />
 
 
 5. API Request Batching
