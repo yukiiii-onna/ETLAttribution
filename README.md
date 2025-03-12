@@ -1,48 +1,141 @@
-Overview
-========
+📄 Attribution Pipeline Orchestration - Final Report
+1. Introduction
+This project implements an Attribution Pipeline Orchestration as part of a Data Engineering technical challenge. The goal is to design a robust data pipeline that:
 
-Welcome to Astronomer! This project was generated after you ran 'astro dev init' using the Astronomer CLI. This readme describes the contents of the project, as well as how to run Apache Airflow on your local machine.
+Queries marketing session and conversion data from a database (SQLite).
+Processes customer journeys by linking user sessions to conversion events.
+Sends processed data to the IHC Attribution API for attribution modeling.
+Stores the computed IHC attribution scores back in the database.
+Generates a channel performance report and exports it as a CSV file.
+Automates the pipeline using Apache Airflow for orchestration.
+This pipeline enables businesses to analyze advertising effectiveness and optimize marketing spend.
 
-Project Contents
-================
+2. Pipeline Overview
+The pipeline follows a modular design where each step is independent, ensuring flexibility and maintainability.
 
-Your Astro project contains the following files and folders:
+📌 Key Steps
+1️⃣ Data Extraction & Preparation
 
-- dags: This folder contains the Python files for your Airflow DAGs. By default, this directory includes one example DAG:
-    - `example_astronauts`: This DAG shows a simple ETL pipeline example that queries the list of astronauts currently in space from the Open Notify API and prints a statement for each astronaut. The DAG uses the TaskFlow API to define tasks in Python, and dynamic task mapping to dynamically print a statement for each astronaut. For more on how this DAG works, see our [Getting started tutorial](https://www.astronomer.io/docs/learn/get-started-with-airflow).
-- Dockerfile: This file contains a versioned Astro Runtime Docker image that provides a differentiated Airflow experience. If you want to execute other commands or overrides at runtime, specify them here.
-- include: This folder contains any additional files that you want to include as part of your project. It is empty by default.
-- packages.txt: Install OS-level packages needed for your project by adding them to this file. It is empty by default.
-- requirements.txt: Install Python packages needed for your project by adding them to this file. It is empty by default.
-- plugins: Add custom or community plugins for your project to this file. It is empty by default.
-- airflow_settings.yaml: Use this local-only file to specify Airflow Connections, Variables, and Pools instead of entering them in the Airflow UI as you develop DAGs in this project.
+Reads data from SQLite (challenge.db).
+Executes SQL scripts to set up necessary tables.
+2️⃣ Customer Journey Construction
 
-Deploy Your Project Locally
-===========================
+Extracts all user sessions that occurred before each conversion.
+Filters out impressions-only interactions.
+3️⃣ API Communication & Attribution Calculation
 
-1. Start Airflow on your local machine by running 'astro dev start'.
+Limits API POST requests to 199 records per batch (IHC API restriction).
+Implements a loop to send multiple batches sequentially until all data is processed.
+Uses trained conversion type ID (CONV_TYPE_ID) obtained from IHC parameter training.
+Stores the attribution values (IHC scores) returned by the API.
+4️⃣ Channel Reporting & CSV Export
 
-This command will spin up 4 Docker containers on your machine, each for a different Airflow component:
+Aggregates attribution data to compute marketing channel effectiveness.
+Computes Cost Per Order (CPO) and Return on Ad Spend (ROAS).
+Exports the results as a CSV file in /reports/.
+5️⃣ Orchestration with Apache Airflow
 
-- Postgres: Airflow's Metadata Database
-- Webserver: The Airflow component responsible for rendering the Airflow UI
-- Scheduler: The Airflow component responsible for monitoring and triggering tasks
-- Triggerer: The Airflow component responsible for triggering deferred tasks
+Uses Apache Airflow on Astro for automation and scheduling.
+Allows dynamic time-range filtering via Airflow Variables.
+3. Deployment with Astro (Instead of Local Airflow)
+I initially attempted to run Airflow locally but faced critical issues mounting the SQLite database inside the container:
 
-2. Verify that all 4 Docker containers were created by running 'docker ps'.
+File permission issues prevented the Airflow DAG from accessing challenge.db.
+Database persistence problems required additional debugging, consuming too much time.
+Airflow's local setup required extensive manual fixes for volume mounting and file access.
+To avoid these issues and save debugging time, I deployed Airflow using Astronomer Astro, which provided:
 
-Note: Running 'astro dev start' will start your project with the Airflow Webserver exposed at port 8080 and Postgres exposed at port 5432. If you already have either of those ports allocated, you can either [stop your existing Docker containers or change the port](https://www.astronomer.io/docs/astro/cli/troubleshoot-locally#ports-are-not-available-for-my-local-airflow-webserver).
+Pre-configured environment: Avoids local Docker and volume mount complexities.
+Better resource management: Runs Airflow on Kubernetes, ensuring smooth DAG execution.
+Built-in observability: Logs, DAG versioning, and monitoring tools for debugging.
+This decision allowed me to focus on building the pipeline rather than fixing infrastructure issues.
 
-3. Access the Airflow UI for your local Airflow project. To do so, go to http://localhost:8080/ and log in with 'admin' for both your Username and Password.
+4. Project Folder Structure
+The project follows a structured layout that separates concerns across different components.
 
-You should also be able to access your Postgres Database at 'localhost:5432/postgres'.
+📂 Project Structure
+graphql
+Copy
+Edit
+ETLATTRIBUTION
+│
+├── dags
+│   ├── attribution_dag.py            # Main DAG defining the pipeline
+│
+├── include
+│   ├── challenge.db                   # SQLite database
+│   ├── create_tables.sql               # SQL script for table setup
+│   ├── data_generator.py               # Generates synthetic data
+│   │
+│   ├── utils                           # Utility functions
+│   │   ├── api_utils.py               # Handles API communication with IHC
+│   │   ├── config.py                   # Stores sensitive credentials (e.g., API keys)
+│   │   ├── db_utils.py                 # Manages database queries and connections
+│   │   ├── file_utils.py               # Handles CSV export and file storage
+│   │   ├── time_utils.py               # Manages time-range filtering for data processing
+│   │   ├── transformation_utils.py     # Processes customer journeys and calculates metrics
+│   │
+│   ├── reports                         # Stores exported CSV reports
+│       ├── channel_reporting.csv       # Final report with marketing channel performance
+5. API Request Batching
+The IHC API enforces a limit of 199 customer journeys per POST request. To handle this, the pipeline:
 
-Deploy Your Project to Astronomer
-=================================
+Splits the data into batches of ≤199 records.
+Sends each batch sequentially in a loop until all customer journeys are processed.
+Logs successful requests and tracks partial failures.
+Retries failed batches separately to ensure data completeness.
+Example Implementation
+python
+Copy
+Edit
+chunk_size = 199  # IHC API limit
+chunks = [customer_journeys[i:i + chunk_size] for i in range(0, len(customer_journeys), chunk_size)]
 
-If you have an Astronomer account, pushing code to a Deployment on Astronomer is simple. For deploying instructions, refer to Astronomer documentation: https://www.astronomer.io/docs/astro/deploy-code/
+for i, chunk in enumerate(chunks):
+    response = requests.post(API_URL, json={"customer_journeys": chunk}, headers={"x-api-key": API_KEY})
+    if response.status_code == 200:
+        log.info(f"✅ Batch {i+1} processed successfully!")
+    else:
+        log.error(f"❌ Batch {i+1} failed: {response.text}")
+6. Future Improvements
+If I had more time, I would redesign the pipeline with three logical stages to ensure better data integrity, transformation separation, and business-focused reporting.
 
-Contact
-=======
+📌 1️⃣ Data Definition Stage (DDS)
+Extract data from session_sources, session_costs, and conversions.
+Store extracted data in a staging layer to avoid modifying original tables during pipeline execution.
+🔹 Why?
 
-The Astronomer CLI is maintained with love by the Astronomer team. To report a bug or suggest a change, reach out to our support.
+Prevents data inconsistencies caused by concurrent modifications.
+Ensures a safe snapshot of data for processing.
+📌 2️⃣ Calculation Definition Stage (CDS)
+Perform all transformations and calculations in this layer.
+Construct customer journeys, apply IHC attribution, and compute marketing KPIs.
+🔹 Why?
+
+Separates raw data from transformed data, reducing errors.
+Allows recalculations without affecting source data.
+📌 3️⃣ Business Definition Stage (BDS)
+Create business-ready views for marketing analysis.
+Hide irrelevant columns and expose only meaningful KPIs.
+🔹 Why?
+
+Provides a clean and structured interface for business users.
+Simplifies reporting & dashboard automation.
+🔹 Move from SQLite to AWS Redshift
+SQLite is limited in scalability.
+AWS Redshift would allow:
+Faster querying on large datasets.
+Parallel processing for performance improvements.
+Better integration with AWS analytics tools.
+🔹 Store Reports in AWS S3 Instead of Local Storage
+Instead of keeping reports locally, integrate with AWS S3.
+Use Airflow S3 Operators to automatically upload reports.
+Benefits:
+Scalability: Handles large files efficiently.
+Availability: Data is accessible across distributed teams.
+7. Conclusion
+This pipeline automates customer attribution modeling, enhances marketing insights, and ensures scalable data processing.
+
+By leveraging modular code, orchestration with Airflow, and a structured processing model, the system is efficient, maintainable, and ready for future scaling.
+
+Future upgrades (AWS Redshift, S3, Tableau automation) would further enhance its capabilities.
