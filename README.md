@@ -54,9 +54,6 @@ This decision allowed me to focus on building the pipeline rather than fixing in
 The project follows a structured layout that separates concerns across different components.
 
 📂 Project Structure
-graphql
-Copy
-Edit
 ETLATTRIBUTION
 │
 ├── dags
@@ -77,6 +74,9 @@ ETLATTRIBUTION
 │   │
 │   ├── reports                         # Stores exported CSV reports
 │       ├── channel_reporting.csv       # Final report with marketing channel performance
+
+
+
 5. API Request Batching
 The IHC API enforces a limit of 199 customer journeys per POST request. To handle this, the pipeline:
 
