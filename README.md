@@ -1,13 +1,14 @@
 📄 Attribution Pipeline Orchestration - Final Report
+
 1. Introduction
 This project implements an Attribution Pipeline Orchestration as part of a Data Engineering technical challenge. The goal is to design a robust data pipeline that:
+    - Queries marketing session and conversion data from a database (SQLite).
+    - Processes customer journeys by linking user sessions to conversion events.
+    - Sends processed data to the IHC Attribution API for attribution modeling.
+    - Stores the computed IHC attribution scores back in the database.
+    - Generates a channel performance report and exports it as a CSV file.
+    - Automates the pipeline using Apache Airflow for orchestration.
 
-Queries marketing session and conversion data from a database (SQLite).
-Processes customer journeys by linking user sessions to conversion events.
-Sends processed data to the IHC Attribution API for attribution modeling.
-Stores the computed IHC attribution scores back in the database.
-Generates a channel performance report and exports it as a CSV file.
-Automates the pipeline using Apache Airflow for orchestration.
 This pipeline enables businesses to analyze advertising effectiveness and optimize marketing spend.
 
 2. Pipeline Overview
@@ -15,39 +16,41 @@ The pipeline follows a modular design where each step is independent, ensuring f
 
 📌 Key Steps
 1️⃣ Data Extraction & Preparation
+    Reads data from SQLite (challenge.db).
+    Executes SQL scripts to set up necessary tables.
 
-Reads data from SQLite (challenge.db).
-Executes SQL scripts to set up necessary tables.
 2️⃣ Customer Journey Construction
-
-Extracts all user sessions that occurred before each conversion.
-Filters out impressions-only interactions.
+    Extracts all user sessions that occurred before each conversion.
+    Filters out impressions-only interactions.
+    
 3️⃣ API Communication & Attribution Calculation
-
-Limits API POST requests to 199 records per batch (IHC API restriction).
-Implements a loop to send multiple batches sequentially until all data is processed.
-Uses trained conversion type ID (CONV_TYPE_ID) obtained from IHC parameter training.
-Stores the attribution values (IHC scores) returned by the API.
+    Limits API POST requests to 199 records per batch (IHC API restriction).
+    Implements a loop to send multiple batches sequentially until all data is processed.
+    Uses trained conversion type ID (CONV_TYPE_ID) obtained from IHC parameter training.
+    Stores the attribution values (IHC scores) returned by the API.
+    
 4️⃣ Channel Reporting & CSV Export
-
-Aggregates attribution data to compute marketing channel effectiveness.
-Computes Cost Per Order (CPO) and Return on Ad Spend (ROAS).
-Exports the results as a CSV file in /reports/.
+    Aggregates attribution data to compute marketing channel effectiveness.
+    Computes Cost Per Order (CPO) and Return on Ad Spend (ROAS).
+    Exports the results as a CSV file in /reports/.
+    
 5️⃣ Orchestration with Apache Airflow
+    Uses Apache Airflow on Astro for automation and scheduling.
+    Allows dynamic time-range filtering via Airflow Variables.
 
-Uses Apache Airflow on Astro for automation and scheduling.
-Allows dynamic time-range filtering via Airflow Variables.
+
+
 3. Deployment with Astro (Instead of Local Airflow)
 I initially attempted to run Airflow locally but faced critical issues mounting the SQLite database inside the container:
+    - File permission issues prevented the Airflow DAG from accessing challenge.db.
+    - Database persistence problems required additional debugging, consuming too much time.
+    - Airflow's local setup required extensive manual fixes for volume mounting and file access.
 
-File permission issues prevented the Airflow DAG from accessing challenge.db.
-Database persistence problems required additional debugging, consuming too much time.
-Airflow's local setup required extensive manual fixes for volume mounting and file access.
 To avoid these issues and save debugging time, I deployed Airflow using Astronomer Astro, which provided:
+    - Pre-configured environment: Avoids local Docker and volume mount complexities.
+    - Better resource management: Runs Airflow on Kubernetes, ensuring smooth DAG execution.
+    - Built-in observability: Logs, DAG versioning, and monitoring tools for debugging.
 
-Pre-configured environment: Avoids local Docker and volume mount complexities.
-Better resource management: Runs Airflow on Kubernetes, ensuring smooth DAG execution.
-Built-in observability: Logs, DAG versioning, and monitoring tools for debugging.
 This decision allowed me to focus on building the pipeline rather than fixing infrastructure issues.
 
 4. Project Folder Structure
@@ -57,6 +60,10 @@ The project follows a structured layout that separates concerns across different
 <img width="676" alt="Screenshot 2025-03-12 at 22 39 12" src="https://github.com/user-attachments/assets/7d42a8a9-e152-42c0-a90e-95af6335ab34" />
 
 
+
+
+
+
 5. API Request Batching
 The IHC API enforces a limit of 199 customer journeys per POST request. To handle this, the pipeline:
 
@@ -64,10 +71,9 @@ Splits the data into batches of ≤199 records.
 Sends each batch sequentially in a loop until all customer journeys are processed.
 Logs successful requests and tracks partial failures.
 Retries failed batches separately to ensure data completeness.
+
 Example Implementation
-python
-Copy
-Edit
+
 chunk_size = 199  # IHC API limit
 chunks = [customer_journeys[i:i + chunk_size] for i in range(0, len(customer_journeys), chunk_size)]
 
@@ -77,6 +83,8 @@ for i, chunk in enumerate(chunks):
         log.info(f"✅ Batch {i+1} processed successfully!")
     else:
         log.error(f"❌ Batch {i+1} failed: {response.text}")
+
+        
 6. Future Improvements
 If I had more time, I would redesign the pipeline with three logical stages to ensure better data integrity, transformation separation, and business-focused reporting.
 
@@ -84,35 +92,40 @@ If I had more time, I would redesign the pipeline with three logical stages to e
 Extract data from session_sources, session_costs, and conversions.
 Store extracted data in a staging layer to avoid modifying original tables during pipeline execution.
 🔹 Why?
+    - Prevents data inconsistencies caused by concurrent modifications.
+    - Ensures a safe snapshot of data for processing.
 
-Prevents data inconsistencies caused by concurrent modifications.
-Ensures a safe snapshot of data for processing.
 📌 2️⃣ Calculation Definition Stage (CDS)
 Perform all transformations and calculations in this layer.
 Construct customer journeys, apply IHC attribution, and compute marketing KPIs.
 🔹 Why?
+    - Separates raw data from transformed data, reducing errors.
+    - Allows recalculations without affecting source data.
 
-Separates raw data from transformed data, reducing errors.
-Allows recalculations without affecting source data.
 📌 3️⃣ Business Definition Stage (BDS)
 Create business-ready views for marketing analysis.
 Hide irrelevant columns and expose only meaningful KPIs.
 🔹 Why?
+    - Provides a clean and structured interface for business users.
+    - Simplifies reporting & dashboard automation.
 
-Provides a clean and structured interface for business users.
-Simplifies reporting & dashboard automation.
+
 🔹 Move from SQLite to AWS Redshift
-SQLite is limited in scalability.
-AWS Redshift would allow:
-Faster querying on large datasets.
-Parallel processing for performance improvements.
-Better integration with AWS analytics tools.
+- SQLite is limited in scalability.
+- AWS Redshift would allow:
+     - Faster querying on large datasets.
+     - Parallel processing for performance improvements.
+     - Better integration with AWS analytics tools.
+
 🔹 Store Reports in AWS S3 Instead of Local Storage
-Instead of keeping reports locally, integrate with AWS S3.
-Use Airflow S3 Operators to automatically upload reports.
+- Instead of keeping reports locally, integrate with AWS S3.
+- Use Airflow S3 Operators to automatically upload reports.
+
 Benefits:
-Scalability: Handles large files efficiently.
-Availability: Data is accessible across distributed teams.
+    - Scalability: Handles large files efficiently.
+    - Availability: Data is accessible across distributed teams.
+
+
 7. Conclusion
 This pipeline automates customer attribution modeling, enhances marketing insights, and ensures scalable data processing.
 
